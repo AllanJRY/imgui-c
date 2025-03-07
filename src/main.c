@@ -2,14 +2,22 @@
 #define UNICODE
 #endif
 
+#include <stdbool.h>
 #include <windows.h>
+
+static bool running;
 
 LRESULT w32_wnd_callback(HWND wnd_handle, UINT msg, WPARAM w_param, LPARAM l_param) {
     LRESULT result = 0;
 
     switch(msg) {
         case WM_CLOSE: {
-            PostQuitMessage(0);
+            // TODO: Here we can ask the user it is sure to close the app.
+            running = false;
+        } break;
+        case WM_DESTROY: {
+            // TODO: Here we can try to rebuild the window.
+            running = false;
         } break;
         case WM_PAINT: {
             PAINTSTRUCT paint;
@@ -69,9 +77,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR cmd_line,
     }
 
     MSG msg = {0};
-    while(GetMessage(&msg, 0, 0, 0) > 0) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
+    running = true;
+    while(running) {
+        if(GetMessage(&msg, 0, 0, 0) > 0) {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+
+        // Rest of the main loop.
     }
 
     return 0;
