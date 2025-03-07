@@ -6,6 +6,9 @@
 #include <stdint.h>
 #include <windows.h>
 
+#define BITS_PER_PIXEL  32
+#define BYTES_PER_PIXEL 4
+
 typedef struct W32_Rect {
     int x, y, width, height;
 } W32_Rect;
@@ -42,26 +45,13 @@ static void w32_resize_dib_section(int width, int height) {
     screen_bmp.info.bmiHeader.biWidth         = width;
     screen_bmp.info.bmiHeader.biHeight        = -height; // negative=top-down, positive=bottom-up
     screen_bmp.info.bmiHeader.biPlanes        = 1;
-    screen_bmp.info.bmiHeader.biBitCount      = 32;
+    screen_bmp.info.bmiHeader.biBitCount      = BITS_PER_PIXEL;
     screen_bmp.info.bmiHeader.biCompression   = BI_RGB;
 
-    int bytes_per_pixel = 4;
-    int bmp_mem_size = (width * height) * bytes_per_pixel; 
+    int bmp_mem_size = (width * height) * BYTES_PER_PIXEL; 
     screen_bmp.mem = VirtualAlloc(0, bmp_mem_size, MEM_COMMIT, PAGE_READWRITE);
 
 
-    uint8_t* row = (uint8_t*) screen_bmp.mem;
-    for (int y = 0; y < height; y += 1) {
-        uint32_t* pixel = (uint32_t*) row;
-        for (int x = 0; x < width; x += 1) {
-            uint8_t blue  = (uint8_t) x;
-            uint8_t green = (uint8_t) y;
-            *pixel = (green << 8) | blue;
-            pixel += 1;
-        }
-
-        row += bytes_per_pixel * width;
-    }
 }
 
 static void w32_dc_update_content(HDC dc_handle, W32_Rect content_rect) {
@@ -142,15 +132,40 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR cmd_line,
         return 1;
     }
 
-    MSG msg = {0};
-    running = true;
+    MSG msg      = {0};
+    running      = true;
+    int x_offset = 0;
+    int y_offset = 0;
     while(running) {
-        if(GetMessage(&msg, 0, 0, 0) > 0) {
+        while(PeekMessage(&msg, 0, 0, 0, PM_REMOVE) > 0) {
+            if (msg.message == WM_QUIT) {
+                running = false;
+            }
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
 
         // Rest of the main loop.
+        
+        // Render a gradient which move due to the given offset.
+        uint8_t* row = (uint8_t*) screen_bmp.mem;
+        for (int y = 0; y < screen_bmp.height; y += 1) {
+            uint32_t* pixel = (uint32_t*) row;
+            for (int x = 0; x < screen_bmp.width; x += 1) {
+                uint8_t blue  = (uint8_t) x + x_offset;
+                uint8_t green = (uint8_t) y + y_offset;
+                *pixel = (green << 8) | blue;
+                pixel += 1;
+            }
+
+            row += BYTES_PER_PIXEL * screen_bmp.width;
+        }
+        
+        W32_Rect wnd_content_rect = w32_wnd_content_rect(wnd_handle);
+        w32_dc_update_content(GetDC(wnd_handle), wnd_content_rect);
+
+        x_offset += 1;
+        y_offset += 2;
     }
 
     return 0;
