@@ -34,33 +34,33 @@ static W32_Rect w32_wnd_content_rect(HWND  wnd_handle) {
     };
 }
 
-static void w32_resize_dib_section(int width, int height) {
-    if(screen_bmp.mem) {
-        VirtualFree(screen_bmp.mem, 0, MEM_RELEASE);
+static void w32_bmp_resize_dib_section(W32_Bmp* bmp, int width, int height) {
+    if(bmp->mem) {
+        VirtualFree(bmp->mem, 0, MEM_RELEASE);
     }
 
-    screen_bmp.width                          = width;
-    screen_bmp.height                         = height;
-    screen_bmp.info.bmiHeader.biSize          = sizeof(screen_bmp.info.bmiHeader);
-    screen_bmp.info.bmiHeader.biWidth         = width;
-    screen_bmp.info.bmiHeader.biHeight        = -height; // negative=top-down, positive=bottom-up
-    screen_bmp.info.bmiHeader.biPlanes        = 1;
-    screen_bmp.info.bmiHeader.biBitCount      = BITS_PER_PIXEL;
-    screen_bmp.info.bmiHeader.biCompression   = BI_RGB;
+    bmp->width                          = width;
+    bmp->height                         = height;
+    bmp->info.bmiHeader.biSize          = sizeof(bmp->info.bmiHeader);
+    bmp->info.bmiHeader.biWidth         = width;
+    bmp->info.bmiHeader.biHeight        = -height; // negative=top-down, positive=bottom-up
+    bmp->info.bmiHeader.biPlanes        = 1;
+    bmp->info.bmiHeader.biBitCount      = BITS_PER_PIXEL;
+    bmp->info.bmiHeader.biCompression   = BI_RGB;
 
     int bmp_mem_size = (width * height) * BYTES_PER_PIXEL; 
-    screen_bmp.mem = VirtualAlloc(0, bmp_mem_size, MEM_COMMIT, PAGE_READWRITE);
-
-
+    bmp->mem = VirtualAlloc(0, bmp_mem_size, MEM_COMMIT, PAGE_READWRITE);
 }
 
-static void w32_dc_update_content(HDC dc_handle, W32_Rect content_rect) {
+// TODO: Rename to w32_dc_apply_bmp ?
+static void w32_dc_update_content(HDC dc_handle, int dest_width, int dest_height, W32_Bmp src_bmp) {
+    // TODO: correct the aspect ratio.
     (void) StretchDIBits(
         dc_handle,
-        0, 0, content_rect.width, content_rect.height,
-        0, 0, screen_bmp.width, screen_bmp.height,
-        screen_bmp.mem,
-        &screen_bmp.info,
+        0, 0, dest_width, dest_height,
+        0, 0, src_bmp.width, src_bmp.height,
+        src_bmp.mem,
+        &src_bmp.info,
         DIB_RGB_COLORS,
         SRCCOPY
     );
@@ -70,10 +70,6 @@ LRESULT w32_wnd_callback(HWND wnd_handle, UINT msg, WPARAM w_param, LPARAM l_par
     LRESULT result = 0;
 
     switch(msg) {
-        case WM_SIZE: {
-            W32_Rect wnd_content = w32_wnd_content_rect(wnd_handle);
-            w32_resize_dib_section(wnd_content.width, wnd_content.height);
-        } break;
         case WM_CLOSE: {
             // TODO: Here we can ask the user it is sure to close the app.
             running = false;
@@ -87,7 +83,7 @@ LRESULT w32_wnd_callback(HWND wnd_handle, UINT msg, WPARAM w_param, LPARAM l_par
             HDC dc_handle = BeginPaint(wnd_handle, &paint);
 
             W32_Rect wnd_content_rect = w32_wnd_content_rect(wnd_handle);
-            w32_dc_update_content(dc_handle, wnd_content_rect);
+            w32_dc_update_content(dc_handle, wnd_content_rect.width, wnd_content_rect.height, screen_bmp);
 
             EndPaint(wnd_handle, &paint);
         } break;
@@ -112,6 +108,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR cmd_line,
     /*wnd_class.hIcon;*/
     /*wnd_class.hCursor;*/
 
+    w32_bmp_resize_dib_section(&screen_bmp, 1280, 720);
+
     RegisterClass(&wnd_class);
 
     HWND wnd_handle = CreateWindowEx(
@@ -132,11 +130,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR cmd_line,
         return 1;
     }
 
-    MSG msg      = {0};
-    running      = true;
-    int x_offset = 0;
-    int y_offset = 0;
+    running       = true;
+    HDC dc_handle = GetDC(wnd_handle);
+    int x_offset  = 0;
+    int y_offset  = 0;
     while(running) {
+
+        MSG msg = {0};
         while(PeekMessage(&msg, 0, 0, 0, PM_REMOVE) > 0) {
             if (msg.message == WM_QUIT) {
                 running = false;
@@ -162,7 +162,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR cmd_line,
         }
         
         W32_Rect wnd_content_rect = w32_wnd_content_rect(wnd_handle);
-        w32_dc_update_content(GetDC(wnd_handle), wnd_content_rect);
+        w32_dc_update_content(dc_handle, wnd_content_rect.width, wnd_content_rect.height, screen_bmp);
 
         x_offset += 1;
         y_offset += 2;
