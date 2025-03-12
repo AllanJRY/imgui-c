@@ -90,20 +90,26 @@ LRESULT w32_wnd_callback(HWND wnd_handle, UINT msg, WPARAM w_param, LPARAM l_par
         case WM_KEYUP:
         case WM_SYSKEYDOWN:
         case WM_KEYDOWN: {
+            uint32_t vk_code   = w_param;
             bool was_down = (l_param & (1 << 30)) != 0;
-            bool is_down = (l_param & (1 << 31)) == 0;
+            bool is_down  = (l_param & (1 << 31)) == 0;
             bool is_shift = GetKeyState(VK_SHIFT) & KEY_STATE_IS_DOWN_MASK;
             
             if (was_down != is_down) {
-                if (w_param == 'H') { // H
+                if (vk_code == 'H') { // H
                     printf("H");
-                } else if(w_param == 'J') { // J
+                } else if(vk_code == 'J') { // J
                     printf("J");
-                } else if(w_param == 'K') { // K
+                } else if(vk_code == 'K') { // K
                     printf("K");
-                } else if(w_param == 'L') { // L
+                } else if(vk_code == 'L') { // L
                     printf("L");
                 }
+            }
+
+            bool is_alt_down = (l_param & (1 << 29)) != 0;
+            if (vk_code == VK_F4 && is_alt_down) {
+                running = false;
             }
         } break;
         case WM_CLOSE: {
