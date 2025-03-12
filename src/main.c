@@ -4,10 +4,13 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <windows.h>
 
 #define BITS_PER_PIXEL  32
 #define BYTES_PER_PIXEL 4
+
+#define KEY_STATE_IS_DOWN_MASK 0x8000
 
 typedef struct W32_Rect {
     int x, y, width, height;
@@ -53,14 +56,14 @@ static void w32_bmp_resize_dib_section(W32_Bmp* bmp, int width, int height) {
 }
 
 // TODO: Rename to w32_dc_apply_bmp ?
-static void w32_dc_update_content(HDC dc_handle, int dest_width, int dest_height, W32_Bmp src_bmp) {
+static void w32_dc_update_content(HDC dc_handle, int dest_width, int dest_height, W32_Bmp* src_bmp) {
     // TODO: correct the aspect ratio.
     (void) StretchDIBits(
         dc_handle,
         0, 0, dest_width, dest_height,
-        0, 0, src_bmp.width, src_bmp.height,
-        src_bmp.mem,
-        &src_bmp.info,
+        0, 0, src_bmp->width, src_bmp->height,
+        src_bmp->mem,
+        &src_bmp->info,
         DIB_RGB_COLORS,
         SRCCOPY
     );
@@ -70,6 +73,39 @@ LRESULT w32_wnd_callback(HWND wnd_handle, UINT msg, WPARAM w_param, LPARAM l_par
     LRESULT result = 0;
 
     switch(msg) {
+        case WM_LBUTTONDOWN: {
+            printf("WM_LBUTTONDOWN");
+        } break;
+        case WM_LBUTTONUP: {
+            printf("WM_LBUTTONUP");
+        } break;
+        case WM_RBUTTONDOWN: {
+            printf("WM_LBUTTONDOWN");
+        } break;
+        case WM_RBUTTONUP: {
+            printf("WM_LBUTTONUP");
+        } break;
+
+        case WM_SYSKEYUP:
+        case WM_KEYUP:
+        case WM_SYSKEYDOWN:
+        case WM_KEYDOWN: {
+            bool was_down = (l_param & (1 << 30)) != 0;
+            bool is_down = (l_param & (1 << 31)) == 0;
+            bool is_shift = GetKeyState(VK_SHIFT) & KEY_STATE_IS_DOWN_MASK;
+            
+            if (was_down != is_down) {
+                if (w_param == 'H') { // H
+                    printf("H");
+                } else if(w_param == 'J') { // J
+                    printf("J");
+                } else if(w_param == 'K') { // K
+                    printf("K");
+                } else if(w_param == 'L') { // L
+                    printf("L");
+                }
+            }
+        } break;
         case WM_CLOSE: {
             // TODO: Here we can ask the user it is sure to close the app.
             running = false;
@@ -83,7 +119,7 @@ LRESULT w32_wnd_callback(HWND wnd_handle, UINT msg, WPARAM w_param, LPARAM l_par
             HDC dc_handle = BeginPaint(wnd_handle, &paint);
 
             W32_Rect wnd_content_rect = w32_wnd_content_rect(wnd_handle);
-            w32_dc_update_content(dc_handle, wnd_content_rect.width, wnd_content_rect.height, screen_bmp);
+            w32_dc_update_content(dc_handle, wnd_content_rect.width, wnd_content_rect.height, &screen_bmp);
 
             EndPaint(wnd_handle, &paint);
         } break;
@@ -162,7 +198,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR cmd_line,
         }
         
         W32_Rect wnd_content_rect = w32_wnd_content_rect(wnd_handle);
-        w32_dc_update_content(dc_handle, wnd_content_rect.width, wnd_content_rect.height, screen_bmp);
+        w32_dc_update_content(dc_handle, wnd_content_rect.width, wnd_content_rect.height, &screen_bmp);
 
         x_offset += 1;
         y_offset += 2;
