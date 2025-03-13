@@ -52,7 +52,7 @@ static void w32_bmp_resize_dib_section(W32_Bmp* bmp, int width, int height) {
     bmp->info.bmiHeader.biCompression   = BI_RGB;
 
     int bmp_mem_size = (width * height) * BYTES_PER_PIXEL; 
-    bmp->mem = VirtualAlloc(0, bmp_mem_size, MEM_COMMIT, PAGE_READWRITE);
+    bmp->mem = VirtualAlloc(0, bmp_mem_size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 }
 
 // TODO: Rename to w32_dc_apply_bmp ?
@@ -168,7 +168,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR cmd_line,
 
     if (!wnd_handle) {
         MessageBox(0, L"Unable to create a window.", L"Window creation error.", MB_ICONERROR);
-
         return 1;
     }
 
