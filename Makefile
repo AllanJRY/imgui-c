@@ -42,7 +42,7 @@
 
 # ========= config =========
 # compiler
-CC             := gcc -c
+CC             := clang -c
 # Note: -municode needed here to use wWindMain.
 ifeq ($(OS),Windows_NT)
 	CFLAGS := -march=native -Wall -Wextra -Wshadow -Wundef -pedantic -municode
@@ -55,7 +55,7 @@ CFLAG_INCLUDE  := -I
 CFLAG_OUTPUT   := -o
 
 # linker
-LD              := gcc
+LD              := clang
 LDFLAGS         := $(CFLAGS)
 LDFLAGS_DEBUG   := $(CFLAGS_DEBUG)
 LDFLAGS_RELEASE := $(CFLAGS_RELEASE)
@@ -73,7 +73,7 @@ OUTPUT_DIR   := output
 OBJ_DIR      := $(OUTPUT_DIR)/obj
 INCLUDE_DIRS := include src
 LIB_DIRS     := 
-LIBS         := gdi32
+LIBS         := kernel32 user32 gdi32
 
 EXEC_NAME := main
 # ========= endconfig =========
