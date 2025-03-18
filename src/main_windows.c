@@ -1,16 +1,16 @@
-#ifndef UNICODE
-#define UNICODE
-#endif
-
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <windows.h>
+#include <stdio.h> // TODO: remove.
+
 
 #define BITS_PER_PIXEL  32
 #define BYTES_PER_PIXEL 4
 
 #define KEY_STATE_IS_DOWN_MASK 0x8000
+
+#include "imgui.c"
+
+#include <windows.h>
 
 typedef struct W32_Rect {
     int x, y, width, height;
@@ -74,16 +74,16 @@ LRESULT w32_wnd_callback(HWND wnd_handle, UINT msg, WPARAM w_param, LPARAM l_par
 
     switch(msg) {
         case WM_LBUTTONDOWN: {
-            printf("WM_LBUTTONDOWN");
+            OutputDebugStringA("WM_LBUTTONDOWN");
         } break;
         case WM_LBUTTONUP: {
-            printf("WM_LBUTTONUP");
+            OutputDebugStringA("WM_LBUTTONUP");
         } break;
         case WM_RBUTTONDOWN: {
-            printf("WM_LBUTTONDOWN");
+            OutputDebugStringA("WM_LBUTTONDOWN");
         } break;
         case WM_RBUTTONUP: {
-            printf("WM_LBUTTONUP");
+            OutputDebugStringA("WM_LBUTTONUP");
         } break;
 
         case WM_SYSKEYUP:
@@ -94,16 +94,17 @@ LRESULT w32_wnd_callback(HWND wnd_handle, UINT msg, WPARAM w_param, LPARAM l_par
             bool was_down = (l_param & (1 << 30)) != 0;
             bool is_down  = (l_param & (1 << 31)) == 0;
             bool is_shift = GetKeyState(VK_SHIFT) & KEY_STATE_IS_DOWN_MASK;
+            (void) is_shift;
             
             if (was_down != is_down) {
                 if (vk_code == 'H') { // H
-                    printf("H");
+                    OutputDebugStringA("H");
                 } else if(vk_code == 'J') { // J
-                    printf("J");
+                    OutputDebugStringA("J");
                 } else if(vk_code == 'K') { // K
-                    printf("K");
+                    OutputDebugStringA("K");
                 } else if(vk_code == 'L') { // L
-                    printf("L");
+                    OutputDebugStringA("L");
                 }
             }
 
@@ -137,7 +138,7 @@ LRESULT w32_wnd_callback(HWND wnd_handle, UINT msg, WPARAM w_param, LPARAM l_par
     return result;
 }
 
-int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR cmd_line, int show_cmd) {
+int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, int show_cmd) {
     (void) prev_instance;
     (void) cmd_line;
     (void) show_cmd;
@@ -147,7 +148,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR cmd_line,
 
     WNDCLASS wnd_class = {0};
     wnd_class.hInstance     = instance;
-    wnd_class.lpszClassName = L"IMGUI";
+    wnd_class.lpszClassName = "IMGUI";
     wnd_class.style         = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
     wnd_class.lpfnWndProc   = w32_wnd_callback;
     /*wnd_class.hIcon;*/
@@ -160,7 +161,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR cmd_line,
     HWND wnd_handle = CreateWindowEx(
         0,
         wnd_class.lpszClassName,
-        L"INGUI",
+        "IMGUI",
         WS_OVERLAPPEDWINDOW | WS_VISIBLE,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
         0,
@@ -170,7 +171,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR cmd_line,
     );
 
     if (!wnd_handle) {
-        MessageBox(0, L"Unable to create a window.", L"Window creation error.", MB_ICONERROR);
+        MessageBox(0, "Unable to create a window.", "Window creation error.", MB_ICONERROR);
         return 1;
     }
 
@@ -180,8 +181,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR cmd_line,
 
     running       = true;
     HDC dc_handle = GetDC(wnd_handle);
-    int x_offset  = 0;
-    int y_offset  = 0;
     while(running) {
 
         MSG msg = {0};
@@ -193,27 +192,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR cmd_line,
             DispatchMessage(&msg);
         }
 
-        // Rest of the main loop.
-        
-        // Render a gradient which move due to the given offset.
-        uint8_t* row = (uint8_t*) screen_bmp.mem;
-        for (int y = 0; y < screen_bmp.height; y += 1) {
-            uint32_t* pixel = (uint32_t*) row;
-            for (int x = 0; x < screen_bmp.width; x += 1) {
-                uint8_t blue  = (uint8_t) x + x_offset;
-                uint8_t green = (uint8_t) y + y_offset;
-                *pixel = (green << 8) | blue;
-                pixel += 1;
-            }
-
-            row += BYTES_PER_PIXEL * screen_bmp.width;
-        }
+        Imgui_Offscreen_Buffer offscreen_buffer = {0};
+        offscreen_buffer.mem    = screen_bmp.mem;
+        offscreen_buffer.width  = screen_bmp.width;
+        offscreen_buffer.height = screen_bmp.height;
+        imgui_update_and_render(&offscreen_buffer);
         
         W32_Rect wnd_content_rect = w32_wnd_content_rect(wnd_handle);
         w32_dc_update_content(dc_handle, wnd_content_rect.width, wnd_content_rect.height, &screen_bmp);
-
-        x_offset += 1;
-        y_offset += 2;
 
         int64_t end_cycle_count = __rdtsc();
         LARGE_INTEGER end_counter;
