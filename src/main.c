@@ -142,6 +142,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR cmd_line,
     (void) cmd_line;
     (void) show_cmd;
 
+    LARGE_INTEGER perf_count_frequency;
+    (void) QueryPerformanceFrequency(&perf_count_frequency);
+
     WNDCLASS wnd_class = {0};
     wnd_class.hInstance     = instance;
     wnd_class.lpszClassName = L"IMGUI";
@@ -170,6 +173,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR cmd_line,
         MessageBox(0, L"Unable to create a window.", L"Window creation error.", MB_ICONERROR);
         return 1;
     }
+
+    LARGE_INTEGER last_counter;
+    QueryPerformanceCounter(&last_counter);
+    int64_t last_cycle_count = __rdtsc();
 
     running       = true;
     HDC dc_handle = GetDC(wnd_handle);
@@ -207,6 +214,23 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR cmd_line,
 
         x_offset += 1;
         y_offset += 2;
+
+        int64_t end_cycle_count = __rdtsc();
+        LARGE_INTEGER end_counter;
+        QueryPerformanceCounter(&end_counter);
+
+        int64_t cycle_elapsed        = end_cycle_count - last_cycle_count;
+        int64_t counter_elapsed      = end_counter.QuadPart - last_counter.QuadPart;
+        int32_t ms_per_frame         = (int32_t) ((1000 * counter_elapsed) / perf_count_frequency.QuadPart); // NOTE: multiplying by 1000, help getting millisecond instead of seconds
+        int32_t fps                  = perf_count_frequency.QuadPart / counter_elapsed;
+        int32_t mega_cycle_per_frame = (int32_t) (cycle_elapsed / (1000 * 1000));
+        
+        char buffer[256];
+        snprintf(buffer, sizeof(buffer), "%dms/f, %dfps, %dmc/f", ms_per_frame, fps, mega_cycle_per_frame);
+        OutputDebugStringA(buffer);
+
+        last_counter     = end_counter;
+        last_cycle_count = end_cycle_count;
     }
 
     return 0;
