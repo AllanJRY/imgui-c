@@ -2,7 +2,6 @@
 #include <stdint.h>
 #include <stdio.h> // TODO: remove.
 
-
 #define BITS_PER_PIXEL  32
 #define BYTES_PER_PIXEL 4
 
@@ -23,8 +22,10 @@ typedef struct W32_Bmp { // TODO: Maybe rename to W32_Screen_buffer or something
     int        height;
 } W32_Bmp;
 
-static bool    running;
-static W32_Bmp screen_bmp; // TODO: Rename ?
+static bool        running;
+static W32_Bmp     screen_bmp; // TODO: Rename ?
+static Imgui_Input old_input;
+static Imgui_Input curr_input;
 
 static W32_Rect w32_wnd_content_rect(HWND  wnd_handle) {
     RECT client_rect;
@@ -97,14 +98,14 @@ LRESULT w32_wnd_callback(HWND wnd_handle, UINT msg, WPARAM w_param, LPARAM l_par
             (void) is_shift;
             
             if (was_down != is_down) {
-                if (vk_code == 'H') { // H
-                    OutputDebugStringA("H");
-                } else if(vk_code == 'J') { // J
-                    OutputDebugStringA("J");
-                } else if(vk_code == 'K') { // K
-                    OutputDebugStringA("K");
-                } else if(vk_code == 'L') { // L
-                    OutputDebugStringA("L");
+                if (vk_code == 'H') {
+                    curr_input.move_left = true;
+                } else if(vk_code == 'J') {
+                    curr_input.move_bottom = true;
+                } else if(vk_code == 'K') {
+                    curr_input.move_top = true;
+                } else if(vk_code == 'L') {
+                    curr_input.move_right = true;
                 }
             }
 
@@ -182,6 +183,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
     running       = true;
     HDC dc_handle = GetDC(wnd_handle);
     while(running) {
+        curr_input = (Imgui_Input){0};
 
         MSG msg = {0};
         while(PeekMessage(&msg, 0, 0, 0, PM_REMOVE) > 0) {
@@ -196,7 +198,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
         offscreen_buffer.mem    = screen_bmp.mem;
         offscreen_buffer.width  = screen_bmp.width;
         offscreen_buffer.height = screen_bmp.height;
-        imgui_update_and_render(&offscreen_buffer);
+        imgui_update_and_render(&offscreen_buffer, &curr_input);
         
         W32_Rect wnd_content_rect = w32_wnd_content_rect(wnd_handle);
         w32_dc_update_content(dc_handle, wnd_content_rect.width, wnd_content_rect.height, &screen_bmp);

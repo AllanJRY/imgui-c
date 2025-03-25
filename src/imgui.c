@@ -1,8 +1,18 @@
 #include "imgui.h"
 
-void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer) {
+void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Input* input) {
     static uint32_t x_offset = 0;
     static uint32_t y_offset = 0;
+
+    if (input->move_left) {
+        x_offset -= 50;
+    } else if (input->move_right) {
+        x_offset += 50;
+    } else if (input->move_top) {
+        y_offset -= 50;
+    } else if (input->move_bottom) {
+        y_offset += 50;
+    }
 
     // Render a gradient which move due to the given offset.
     uint8_t* row = (uint8_t*) offscreen_buffer->mem;
@@ -17,7 +27,4 @@ void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer) {
 
         row += BYTES_PER_PIXEL * offscreen_buffer->width;
     }
-
-    x_offset += 1;
-    y_offset += 2;
 }
