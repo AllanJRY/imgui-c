@@ -24,8 +24,6 @@ typedef struct W32_Bmp { // TODO: Maybe rename to W32_Screen_buffer or something
 
 static bool        running;
 static W32_Bmp     screen_bmp; // TODO: Rename ?
-static Imgui_Input old_input;
-static Imgui_Input curr_input;
 
 static W32_Rect w32_wnd_content_rect(HWND  wnd_handle) {
     RECT client_rect;
@@ -91,28 +89,7 @@ LRESULT w32_wnd_callback(HWND wnd_handle, UINT msg, WPARAM w_param, LPARAM l_par
         case WM_KEYUP:
         case WM_SYSKEYDOWN:
         case WM_KEYDOWN: {
-            uint32_t vk_code   = w_param;
-            bool was_down = (l_param & (1 << 30)) != 0;
-            bool is_down  = (l_param & (1 << 31)) == 0;
-            bool is_shift = GetKeyState(VK_SHIFT) & KEY_STATE_IS_DOWN_MASK;
-            (void) is_shift;
-            
-            if (was_down != is_down) {
-                if (vk_code == 'H') {
-                    curr_input.move_left = true;
-                } else if(vk_code == 'J') {
-                    curr_input.move_bottom = true;
-                } else if(vk_code == 'K') {
-                    curr_input.move_top = true;
-                } else if(vk_code == 'L') {
-                    curr_input.move_right = true;
-                }
-            }
-
-            bool is_alt_down = (l_param & (1 << 29)) != 0;
-            if (vk_code == VK_F4 && is_alt_down) {
-                running = false;
-            }
+            ASSERT(!"Input reach window callback, but should have been handled by main loop.");
         } break;
         case WM_CLOSE: {
             // TODO: Here we can ask the user it is sure to close the app.
@@ -180,18 +157,53 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
     QueryPerformanceCounter(&last_counter);
     int64_t last_cycle_count = __rdtsc();
 
-    running       = true;
-    HDC dc_handle = GetDC(wnd_handle);
+    Imgui_Input old_input  = (Imgui_Input){0};
+    Imgui_Input curr_input = (Imgui_Input){0};
+    running                = true;
+    HDC dc_handle          = GetDC(wnd_handle);
     while(running) {
         curr_input = (Imgui_Input){0};
 
         MSG msg = {0};
         while(PeekMessage(&msg, 0, 0, 0, PM_REMOVE) > 0) {
-            if (msg.message == WM_QUIT) {
-                running = false;
+            switch(msg.message) {
+                case WM_QUIT: {
+                    running = false;
+                } break;
+
+                case WM_SYSKEYUP:
+                case WM_KEYUP:
+                case WM_SYSKEYDOWN:
+                case WM_KEYDOWN: {
+                    uint32_t vk_code   = msg.wParam;
+                    bool was_down = (msg.lParam & (1 << 30)) != 0;
+                    bool is_down  = (msg.lParam & (1 << 31)) == 0;
+                    bool is_shift = GetKeyState(VK_SHIFT) & KEY_STATE_IS_DOWN_MASK;
+                    (void) is_shift;
+                    
+                    if (was_down != is_down) {
+                        if (vk_code == 'H') {
+                            curr_input.move_left = true;
+                        } else if(vk_code == 'J') {
+                            curr_input.move_bottom = true;
+                        } else if(vk_code == 'K') {
+                            curr_input.move_top = true;
+                        } else if(vk_code == 'L') {
+                            curr_input.move_right = true;
+                        }
+                    }
+
+                    bool is_alt_down = (msg.lParam & (1 << 29)) != 0;
+                    if (vk_code == VK_F4 && is_alt_down) {
+                        running = false;
+                    }
+                } break;
+
+                default: {
+                    TranslateMessage(&msg);
+                    DispatchMessage(&msg);
+                } break;
             }
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
         }
 
         Imgui_Offscreen_Buffer offscreen_buffer = {0};
