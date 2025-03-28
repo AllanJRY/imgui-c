@@ -7,4 +7,5 @@ clang -g3 -march=native^
  -pedantic^
  -Iinclude -Isrc^
  -lkernel32 -luser32 -lgdi32^
+ -DDEBUG^
  src/main_windows.c -o output/main.exe

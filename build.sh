@@ -5,4 +5,5 @@ clang -g3 -march=native -fsanitize=address -static-libasan \
  -pedantic \
  -Iinclude -Isrc \
  -lkernel32 -luser32 -lgdi32 \
+ -DDEBUG \
  src/main_linux.c -o output/main

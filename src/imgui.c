@@ -1,6 +1,7 @@
 #include "imgui.h"
 
 void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Input* input) {
+    // TODO: ASSERT(memory->permanent_size >= sizeof(Imgui_Context))
     static uint32_t x_offset = 0;
     static uint32_t y_offset = 0;
 
@@ -26,5 +27,22 @@ void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Inp
         }
 
         row += BYTES_PER_PIXEL * offscreen_buffer->width;
+    }
+
+    imgui_draw_rect(offscreen_buffer, 10, 10, 200, 150, 0xFF0000);
+}
+
+void imgui_draw_rect(Imgui_Offscreen_Buffer* offscreen_buffer, uint32_t top, uint32_t left, uint32_t width, uint32_t height, uint32_t color) {
+    uint32_t* row = (uint32_t*) offscreen_buffer->mem;
+    row += left;
+    row += top * (uint32_t) offscreen_buffer->width;
+    for (uint32_t y = 0; y < height; y += 1) {
+        uint32_t* pixel = (uint32_t*) row;
+        for (uint32_t x = 0; x < width; x += 1) {
+            *pixel = color;
+            pixel += 1;
+        }
+
+        row += offscreen_buffer->width;
     }
 }
