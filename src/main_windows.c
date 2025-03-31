@@ -172,7 +172,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
 
     // NOTE: Hardcoded for now. Normally, should be corresponding the real monitor refresh rate.
     int monitor_refresh_hz = 60;
-    int game_update_hz = monitor_refresh_hz / 2;
+    int game_update_hz = monitor_refresh_hz;
     float target_seconds_per_frame = 1.0f / (float) game_update_hz;
 
     LARGE_INTEGER last_counter = w32_get_perf_counter();
@@ -251,14 +251,13 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
             // TODO: Log missed framerate.
         }
 
-        W32_Rect wnd_content_rect = w32_wnd_content_rect(wnd_handle);
-        w32_dc_update_content(dc_handle, wnd_content_rect.width, wnd_content_rect.height, &screen_bmp);
-
-
         LARGE_INTEGER end_counter = w32_get_perf_counter();
         float ms_per_frame        = 1000.0f * w32_get_seconds_elapsed(last_counter, end_counter);
         int32_t fps               = 0; // TODO
         last_counter              = end_counter;
+
+        W32_Rect wnd_content_rect = w32_wnd_content_rect(wnd_handle);
+        w32_dc_update_content(dc_handle, wnd_content_rect.width, wnd_content_rect.height, &screen_bmp);
 
         int64_t end_cycle_count = __rdtsc();
         int64_t cycle_elapsed   = end_cycle_count - last_cycle_count;
