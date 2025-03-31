@@ -6,6 +6,6 @@ clang -g3 -march=native^
  -Wall -Wextra -Wshadow -Wundef^
  -pedantic^
  -Iinclude -Isrc^
- -lkernel32 -luser32 -lgdi32^
+ -lkernel32 -luser32 -lgdi32 -lwinmm^
  -DDEBUG^
  src/main_windows.c -o output/main.exe

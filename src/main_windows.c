@@ -22,8 +22,9 @@ typedef struct W32_Bmp { // TODO: Maybe rename to W32_Screen_buffer or something
     int        height;
 } W32_Bmp;
 
-static bool        running;
-static W32_Bmp     screen_bmp; // TODO: Rename ?
+static uint64_t perf_count_frequency;
+static bool     running;
+static W32_Bmp  screen_bmp; // TODO: Rename ?
 
 static W32_Rect w32_wnd_content_rect(HWND  wnd_handle) {
     RECT client_rect;
@@ -116,13 +117,29 @@ LRESULT w32_wnd_callback(HWND wnd_handle, UINT msg, WPARAM w_param, LPARAM l_par
     return result;
 }
 
+inline LARGE_INTEGER w32_get_perf_counter(void)  {
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+    return counter;
+}
+
+inline float w32_get_seconds_elapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
+    return ((float)(end.QuadPart - start.QuadPart)) / (float)perf_count_frequency;
+}
+
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, int show_cmd) {
     (void) prev_instance;
     (void) cmd_line;
     (void) show_cmd;
 
-    LARGE_INTEGER perf_count_frequency;
-    (void) QueryPerformanceFrequency(&perf_count_frequency);
+    LARGE_INTEGER perf_count_frequency_result;
+    QueryPerformanceFrequency(&perf_count_frequency_result);
+    perf_count_frequency = perf_count_frequency_result.QuadPart;
+
+    // Note: Help Sleep to be more granular.
+    UINT desired_windows_scheduler_granularity_ms = 1;
+    int sleep_is_granular = (timeBeginPeriod(desired_windows_scheduler_granularity_ms) == TIMERR_NOERROR);
+    printf("ici\n");
 
     WNDCLASS wnd_class = {0};
     wnd_class.hInstance     = instance;
@@ -153,9 +170,13 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
         return 1;
     }
 
-    LARGE_INTEGER last_counter;
-    QueryPerformanceCounter(&last_counter);
-    int64_t last_cycle_count = __rdtsc();
+    // NOTE: Hardcoded for now. Normally, should be corresponding the real monitor refresh rate.
+    int monitor_refresh_hz = 60;
+    int game_update_hz = monitor_refresh_hz / 2;
+    float target_seconds_per_frame = 1.0f / (float) game_update_hz;
+
+    LARGE_INTEGER last_counter = w32_get_perf_counter();
+    int64_t last_cycle_count   = __rdtsc();
 
     Imgui_Input old_input  = (Imgui_Input){0};
     Imgui_Input curr_input = (Imgui_Input){0};
@@ -212,25 +233,42 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
         offscreen_buffer.height = screen_bmp.height;
         imgui_update_and_render(&offscreen_buffer, &curr_input);
         
+        LARGE_INTEGER frame_counter         = w32_get_perf_counter();
+        float frame_counter_seconds_elapsed = w32_get_seconds_elapsed(last_counter, frame_counter);
+
+        if (frame_counter_seconds_elapsed < target_seconds_per_frame) {
+            while (frame_counter_seconds_elapsed < target_seconds_per_frame) {
+                if (sleep_is_granular) {
+                    DWORD sleep_duration_ms =  (DWORD) (1000.0f * (target_seconds_per_frame - frame_counter_seconds_elapsed));
+                    if (sleep_duration_ms > 0) {
+                        Sleep(sleep_duration_ms);
+                    }
+                }
+
+                frame_counter_seconds_elapsed = w32_get_seconds_elapsed(last_counter, w32_get_perf_counter());
+            }
+        } else {
+            // TODO: Log missed framerate.
+        }
+
         W32_Rect wnd_content_rect = w32_wnd_content_rect(wnd_handle);
         w32_dc_update_content(dc_handle, wnd_content_rect.width, wnd_content_rect.height, &screen_bmp);
 
+
+        LARGE_INTEGER end_counter = w32_get_perf_counter();
+        float ms_per_frame        = 1000.0f * w32_get_seconds_elapsed(last_counter, end_counter);
+        int32_t fps               = 0; // TODO
+        last_counter              = end_counter;
+
         int64_t end_cycle_count = __rdtsc();
-        LARGE_INTEGER end_counter;
-        QueryPerformanceCounter(&end_counter);
-
-        int64_t cycle_elapsed        = end_cycle_count - last_cycle_count;
-        int64_t counter_elapsed      = end_counter.QuadPart - last_counter.QuadPart;
-        int32_t ms_per_frame         = (int32_t) ((1000 * counter_elapsed) / perf_count_frequency.QuadPart); // NOTE: multiplying by 1000, help getting millisecond instead of seconds
-        int32_t fps                  = perf_count_frequency.QuadPart / counter_elapsed;
+        int64_t cycle_elapsed   = end_cycle_count - last_cycle_count;
         int32_t mega_cycle_per_frame = (int32_t) (cycle_elapsed / (1000 * 1000));
-        
-        char buffer[256];
-        snprintf(buffer, sizeof(buffer), "%dms/f, %dfps, %dmc/f", ms_per_frame, fps, mega_cycle_per_frame);
-        OutputDebugStringA(buffer);
+        last_cycle_count        = end_cycle_count;
 
-        last_counter     = end_counter;
-        last_cycle_count = end_cycle_count;
+        
+        char frame_stats_buffer[256];
+        snprintf(frame_stats_buffer, sizeof(frame_stats_buffer), "%.02fms/f, %dfps, %dmc/f", ms_per_frame, fps, mega_cycle_per_frame);
+        OutputDebugStringA(frame_stats_buffer);
     }
 
     return 0;
