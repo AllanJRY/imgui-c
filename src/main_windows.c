@@ -2,9 +2,6 @@
 #include <stdint.h>
 #include <stdio.h> // TODO: remove.
 
-#define BITS_PER_PIXEL  32
-#define BYTES_PER_PIXEL 4
-
 #define KEY_STATE_IS_DOWN_MASK 0x8000
 
 #include "imgui.c"
