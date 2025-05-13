@@ -1,24 +1,48 @@
 #include "imgui.h"
 
 void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Input* input) {
+    // TODO: Create the context before, like, inside the platform code ?
     Imgui_Context ctx = {0};
     imgui_context_init(&ctx, offscreen_buffer);
 
     // TODO: ASSERT(memory->permanent_size >= sizeof(Imgui_Context))
 
+
     // PASSES START
 
-    // imgui_element_open(
-    //     &ctx,
-    //     Horizontal,
-    //     0xFFFFFF,
-    //     10,
-    //     (Imgui_Padding) {10, 10, 10, 10},
-    //     (Imgui_Position) {.type = Relative, .x = 0, .y = 0},
-    //     (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .type = Grow }, .height = (Imgui_Sizing_Axis) { .type = Grow } }
-    // );
+    imgui_element_open(
+        &ctx,
+        Horizontal,
+        0x00FF00,
+        10,
+        (Imgui_Padding) {10, 10, 10, 10},
+        (Imgui_Position) {.type = Relative, .x = 0, .y = 0},
+        (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .type = Fit }, .height = (Imgui_Sizing_Axis) { .type = Fit } }
+    );
 
-    // imgui_element_close(&ctx);
+    imgui_element_open(
+        &ctx,
+        Horizontal,
+        0xFF0000,
+        10,
+        (Imgui_Padding) {10, 10, 10, 10},
+        (Imgui_Position) {.type = Relative, .x = 0, .y = 0},
+        (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed }, .height = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed } }
+    );
+    imgui_element_close(&ctx);
+
+    imgui_element_open(
+        &ctx,
+        Horizontal,
+        0x0000FF,
+        10,
+        (Imgui_Padding) {10, 10, 10, 10},
+        (Imgui_Position) {.type = Relative, .x = 0, .y = 0},
+        (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed }, .height = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed } }
+    );
+    imgui_element_close(&ctx);
+
+    imgui_element_close(&ctx);
 
     // PASSES END
 
@@ -27,6 +51,9 @@ void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Inp
         Imgui_Element element = ctx.root.children.elements[i];
         imgui_draw_rect(offscreen_buffer, element.position.x, element.position.y, element.sizing.width.size.min, element.sizing.height.size.min, element.bg_color);
     }
+
+    // TODO: Clear the context and allocated arrays ? Should be a lot simpler with a custom 
+    // allocator on a pre-allocated buffer (here the temp buffer should suit us perfectly)
 }
 
 void imgui_context_init(Imgui_Context* ctx, Imgui_Offscreen_Buffer* offscreen_buffer) {
@@ -56,35 +83,6 @@ void imgui_context_init(Imgui_Context* ctx, Imgui_Offscreen_Buffer* offscreen_bu
 
     // TODO use one from custom allocator
     // memset(ctx->open_stack.elements, 0, ctx->open_stack.cap * sizeof(Imgui_Element));
-}
-
-void imgui_draw_rect(Imgui_Offscreen_Buffer* offscreen_buffer, uint32_t pos_x, uint32_t pos_y, uint32_t width, uint32_t height, uint32_t color) {
-    int32_t x_overflow = (pos_x + width) - ((uint32_t) offscreen_buffer->width);
-    int32_t y_overflow = (pos_y + height) - ((uint32_t) offscreen_buffer->height);
-
-    uint32_t inbound_width = width;
-    if (x_overflow > 0) {
-        inbound_width -= x_overflow;
-    }
-
-    uint32_t inbound_height = height;
-    if (y_overflow > 0) {
-        inbound_height -= y_overflow;
-    }
-
-    uint32_t* row = (uint32_t*) offscreen_buffer->mem;
-
-    row += pos_x;
-    row += pos_y * (uint32_t) offscreen_buffer->width;
-    for (uint32_t y = 0; y < inbound_height; y += 1) {
-        uint32_t* pixel = (uint32_t*) row;
-        for (uint32_t x = 0; x < inbound_width; x += 1) {
-            *pixel = color;
-            pixel += 1;
-        }
-
-        row += offscreen_buffer->width;
-    }
 }
 
 void imgui_element_open(
@@ -122,17 +120,24 @@ void imgui_element_close(Imgui_Context* ctx) {
     Imgui_Element element;
     (void) imgui_element_stack_pop(&ctx->open_stack, &element);
 
+    // TODO: this is more margin than padding, change this.
+    Imgui_Padding padding = element.padding;
+    element.sizing.width.size.min += padding.left + padding.right;
+    element.sizing.height.size.min += padding.top + padding.bottom;
+
     Imgui_Element* parent = imgui_element_stack_peek(&ctx->open_stack);
     if (parent == NULL) {
         imgui_element_array_push(&ctx->root.children, &element);
         return;
     }
 
-    // TODO: check parent elements length to grow it.
-    parent->children.elements[parent->children.len] = element;
-    parent->children.len += 1;
+    imgui_element_array_push(&parent->children, &element);
 
     if (parent->layout_direction == Horizontal) {
+        if (parent->children.len > 1) {
+            parent->sizing.width.size.min += parent->child_gap;
+        }
+
         if (parent->sizing.width.type == Fit) {
             parent->sizing.width.size.min += element.sizing.width.size.min;
         }
@@ -143,6 +148,10 @@ void imgui_element_close(Imgui_Context* ctx) {
             }
         }
     } else {
+        if (parent->children.len > 1) {
+            parent->sizing.height.size.min += parent->child_gap;
+        }
+
         if (parent->sizing.height.type == Fit) {
             parent->sizing.height.size.min += element.sizing.height.size.min;
         }
@@ -213,4 +222,33 @@ void* imgui_backing_buffer_grow(void* backing_buffer, int new_size) {
     // memset to 0 the new mem space.
 
     return new_mem;
+}
+
+void imgui_draw_rect(Imgui_Offscreen_Buffer* offscreen_buffer, uint32_t pos_x, uint32_t pos_y, uint32_t width, uint32_t height, uint32_t color) {
+    int32_t x_overflow = (pos_x + width) - ((uint32_t) offscreen_buffer->width);
+    int32_t y_overflow = (pos_y + height) - ((uint32_t) offscreen_buffer->height);
+
+    uint32_t inbound_width = width;
+    if (x_overflow > 0) {
+        inbound_width -= x_overflow;
+    }
+
+    uint32_t inbound_height = height;
+    if (y_overflow > 0) {
+        inbound_height -= y_overflow;
+    }
+
+    uint32_t* row = (uint32_t*) offscreen_buffer->mem;
+
+    row += pos_x;
+    row += pos_y * (uint32_t) offscreen_buffer->width;
+    for (uint32_t y = 0; y < inbound_height; y += 1) {
+        uint32_t* pixel = (uint32_t*) row;
+        for (uint32_t x = 0; x < inbound_width; x += 1) {
+            *pixel = color;
+            pixel += 1;
+        }
+
+        row += offscreen_buffer->width;
+    }
 }

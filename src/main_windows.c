@@ -175,10 +175,14 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
     LARGE_INTEGER last_counter = w32_get_perf_counter();
     int64_t last_cycle_count   = __rdtsc();
 
+    // TODO: Load the memory with VirtualAlloc
+    // TODO: gmv (Gestion Mémoire Virtuelle)
+
     Imgui_Input old_input  = (Imgui_Input){0};
     Imgui_Input curr_input = (Imgui_Input){0};
     running                = true;
     HDC dc_handle          = GetDC(wnd_handle);
+
     while(running) {
         curr_input = (Imgui_Input){0};
 
