@@ -11,7 +11,7 @@ void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Mem
     // imgui_context_init(ctx, offscreen_buffer);
 
     Imgui_Context ctx = {0};
-    gmv_arena_init(&ctx.allocator, memory->temporary, memory->temporary_size);
+    gmv_arena_init(&ctx.allocator, memory->temporary, memory->temporary_size); // Init only if not already init.
     ctx.elements_count_limit         = 50;
     ctx.elements.len                 = 0;
     ctx.elements.cap                 = ctx.elements_count_limit;
@@ -22,37 +22,50 @@ void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Mem
 
     // Begin
 
+    // Element creation / size definition phase
     imgui_element_open(
         &ctx,
         Horizontal,
         0x00FF00,
-        10,
-        (Imgui_Padding) {10, 10, 10, 10},
+        0,
+        (Imgui_Padding) {0},
         (Imgui_Position) {.type = Relative, .x = 0, .y = 0},
         (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .size.min = offscreen_buffer->width, .type = Fixed }, .height = (Imgui_Sizing_Axis) { .size.min = offscreen_buffer->height, .type = Fixed } }
     );
 
-    imgui_element_open(
-        &ctx,
-        Horizontal,
-        0xFF0000,
-        10,
-        (Imgui_Padding) {10, 10, 10, 10},
-        (Imgui_Position) {.type = Relative, .x = 0, .y = 0},
-        (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed }, .height = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed } }
-    );
-    imgui_element_close(&ctx);
+        imgui_element_open(
+            &ctx,
+            Horizontal,
+            0x00FFFF,
+            10,
+            (Imgui_Padding) {10, 10, 10, 10},
+            (Imgui_Position) {.type = Relative, .x = 0, .y = 0},
+            (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .type = Fit }, .height = (Imgui_Sizing_Axis) { .type = Fit } }
+        );
 
-    imgui_element_open(
-        &ctx,
-        Horizontal,
-        0x0000FF,
-        10,
-        (Imgui_Padding) {10, 10, 10, 10},
-        (Imgui_Position) {.type = Relative, .x = 0, .y = 0},
-        (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed }, .height = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed } }
-    );
-    imgui_element_close(&ctx);
+            imgui_element_open(
+                &ctx,
+                Horizontal,
+                0xFF0000,
+                10,
+                (Imgui_Padding) {10, 10, 10, 10},
+                (Imgui_Position) {.type = Relative, .x = 0, .y = 0},
+                (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed }, .height = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed } }
+            );
+            imgui_element_close(&ctx);
+
+            imgui_element_open(
+                &ctx,
+                Horizontal,
+                0x0000FF,
+                10,
+                (Imgui_Padding) {10, 10, 10, 10},
+                (Imgui_Position) {.type = Relative, .x = 0, .y = 0},
+                (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed }, .height = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed } }
+            );
+            imgui_element_close(&ctx);
+
+        imgui_element_close(&ctx);
 
     imgui_element_close(&ctx);
 
@@ -60,12 +73,29 @@ void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Mem
 
     ASSERT(ctx.elements_open_stack.len == 0, "All elements should be closed before drawing them on screen");
 
-    // imgui_draw_rect(offscreen_buffer, 0, 0, ctx.root.sizing.width.size.min, ctx.root.sizing.height.size.min, ctx.root.bg_color);
-    // for (uint8_t i = 0; i < ctx.root.children.len; i += 1) {
-    //     Imgui_Element element = ctx.root.children.elements[i];
-    //     imgui_draw_rect(offscreen_buffer, element.position.x, element.position.y, element.sizing.width.size.min, element.sizing.height.size.min, element.bg_color);
-    // }
+    // Position computation phase
+    for (uint32_t i = 0; i < ctx.elements.len; i += 1) {
+        Imgui_Element* parent_element = &ctx.elements.elements[i];
+        uint32_t child_offset_x = parent_element->padding.left;
+        uint32_t child_offset_y = parent_element->padding.top;
+        for (uint32_t j = 0; j < parent_element->children.len; j += 1) {
+            uint32_t child_idx = parent_element->children.elements[j];
+            Imgui_Element* child_element = &ctx.elements.elements[child_idx];
 
+            if (child_element->position.type == Relative) {
+                child_element->position.x += parent_element->position.x + child_offset_x;
+                child_element->position.y += parent_element->position.y + child_offset_y;
+
+                if (parent_element->layout_direction == Horizontal) {
+                    child_offset_x += child_element->sizing.width.size.min + parent_element->child_gap; 
+                } else {
+                    child_offset_y += child_element->sizing.height.size.min + parent_element->child_gap; 
+                }
+            }
+        }
+    }
+
+    // Draw phrase
     for (uint32_t i = 0; i < ctx.elements.len; i += 1) {
         Imgui_Element element = ctx.elements.elements[i];
         imgui_draw_rect(offscreen_buffer, element.position.x, element.position.y, element.sizing.width.size.min, element.sizing.height.size.min, element.bg_color);
@@ -262,7 +292,7 @@ uint32_t* imgui_u32_stack_peek(Imgui_U32_Stack* stack) {
         return NULL;
     }
 
-    return &stack->elements[stack->len];
+    return &stack->elements[stack->len - 1];
 }
 
 bool imgui_u32_stack_pop(Imgui_U32_Stack* stack, uint32_t* poped_val) {
