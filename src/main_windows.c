@@ -4,6 +4,7 @@
 
 #define KEY_STATE_IS_DOWN_MASK 0x8000
 
+#include "gmv.c"
 #include "imgui.c"
 
 #include <windows.h>
@@ -87,7 +88,7 @@ LRESULT w32_wnd_callback(HWND wnd_handle, UINT msg, WPARAM w_param, LPARAM l_par
         case WM_KEYUP:
         case WM_SYSKEYDOWN:
         case WM_KEYDOWN: {
-            ASSERT(!"Input reach window callback, but should have been handled by main loop.");
+            ASSERT(false, "Input reach window callback, but should have been handled by main loop.");
         } break;
         case WM_CLOSE: {
             // TODO: Here we can ask the user it is sure to close the app.
@@ -176,7 +177,12 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
     int64_t last_cycle_count   = __rdtsc();
 
     // TODO: Load the memory with VirtualAlloc
-    // TODO: gmv (Gestion Mémoire Virtuelle)
+    Imgui_Memory memory;
+    memory.permanent_size = 1 * 1024 * 1024; // 1 MiB - Permanent mem, could be saved on disk
+    memory.temporary_size = 1 * 1024 * 1024; // 1 MiB
+    size_t total_mem_size = memory.permanent_size + memory.temporary_size;
+    memory.permanent = VirtualAlloc(0, total_mem_size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+    memory.temporary = (uint8_t*) memory.permanent + memory.temporary_size;
 
     Imgui_Input old_input  = (Imgui_Input){0};
     Imgui_Input curr_input = (Imgui_Input){0};
@@ -232,7 +238,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
         offscreen_buffer.mem    = screen_bmp.mem;
         offscreen_buffer.width  = screen_bmp.width;
         offscreen_buffer.height = screen_bmp.height;
-        imgui_update_and_render(&offscreen_buffer, &curr_input);
+        imgui_update_and_render(&offscreen_buffer, &memory, &curr_input);
         
         LARGE_INTEGER frame_counter         = w32_get_perf_counter();
         float frame_counter_seconds_elapsed = w32_get_seconds_elapsed(last_counter, frame_counter);

@@ -1,14 +1,26 @@
 #include "imgui.h"
 
-void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Input* input) {
-    // TODO: Create the context before, like, inside the platform code ?
+void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Memory* memory, Imgui_Input* input) {
+    ASSERT(offscreen_buffer != NULL, "Offscreen buffer must not be NULL");
+    ASSERT(memory           != NULL, "Memory must not be NULL");
+    ASSERT(input            != NULL, "Input must not be NULL");
+
+    // TODO(AJA): Cast the context from the permanent memory buffer.
+    // ASSERT(memory->permanent_size >= sizeof(Imgui_Context), "Not enough permanent memory size");
+    // Imgui_Context* ctx = (Imgui_Context*) memory->permanent_size;
+    // imgui_context_init(ctx, offscreen_buffer);
+
     Imgui_Context ctx = {0};
-    imgui_context_init(&ctx, offscreen_buffer);
+    gmv_arena_init(&ctx.allocator, memory->temporary, memory->temporary_size);
+    ctx.elements_count_limit         = 50;
+    ctx.elements.len                 = 0;
+    ctx.elements.cap                 = ctx.elements_count_limit;
+    ctx.elements.elements            = (Imgui_Element*) gmv_arena_alloc(&ctx.allocator, sizeof(Imgui_Element) * ctx.elements.cap);
+    ctx.elements_open_stack.len      = 0;
+    ctx.elements_open_stack.cap      = ctx.elements_count_limit;
+    ctx.elements_open_stack.elements = (uint32_t*) gmv_arena_alloc(&ctx.allocator, sizeof(uint32_t) * ctx.elements_open_stack.cap);
 
-    // TODO: ASSERT(memory->permanent_size >= sizeof(Imgui_Context))
-
-
-    // PASSES START
+    // Begin
 
     imgui_element_open(
         &ctx,
@@ -17,7 +29,7 @@ void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Inp
         10,
         (Imgui_Padding) {10, 10, 10, 10},
         (Imgui_Position) {.type = Relative, .x = 0, .y = 0},
-        (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .type = Fit }, .height = (Imgui_Sizing_Axis) { .type = Fit } }
+        (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .size.min = offscreen_buffer->width, .type = Fixed }, .height = (Imgui_Sizing_Axis) { .size.min = offscreen_buffer->height, .type = Fixed } }
     );
 
     imgui_element_open(
@@ -44,46 +56,53 @@ void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Inp
 
     imgui_element_close(&ctx);
 
-    // PASSES END
+    // END
 
-    imgui_draw_rect(offscreen_buffer, 0, 0, ctx.root.sizing.width.size.min, ctx.root.sizing.height.size.min, ctx.root.bg_color);
-    for (uint8_t i = 0; i < ctx.root.children.len; i += 1) {
-        Imgui_Element element = ctx.root.children.elements[i];
+    ASSERT(ctx.elements_open_stack.len == 0, "All elements should be closed before drawing them on screen");
+
+    // imgui_draw_rect(offscreen_buffer, 0, 0, ctx.root.sizing.width.size.min, ctx.root.sizing.height.size.min, ctx.root.bg_color);
+    // for (uint8_t i = 0; i < ctx.root.children.len; i += 1) {
+    //     Imgui_Element element = ctx.root.children.elements[i];
+    //     imgui_draw_rect(offscreen_buffer, element.position.x, element.position.y, element.sizing.width.size.min, element.sizing.height.size.min, element.bg_color);
+    // }
+
+    for (uint32_t i = 0; i < ctx.elements.len; i += 1) {
+        Imgui_Element element = ctx.elements.elements[i];
         imgui_draw_rect(offscreen_buffer, element.position.x, element.position.y, element.sizing.width.size.min, element.sizing.height.size.min, element.bg_color);
     }
-
-    // TODO: Clear the context and allocated arrays ? Should be a lot simpler with a custom 
-    // allocator on a pre-allocated buffer (here the temp buffer should suit us perfectly)
 }
 
-void imgui_context_init(Imgui_Context* ctx, Imgui_Offscreen_Buffer* offscreen_buffer) {
-    ctx->root.layout_direction        = Horizontal;
-    ctx->root.position                = (Imgui_Position) {.type = Absolute, .x = 0, .y = 0};
-    ctx->root.sizing.width.type       = Fixed;
-    ctx->root.sizing.width.size.min   = offscreen_buffer->width;
-    ctx->root.sizing.width.size.max   = offscreen_buffer->width;
-    ctx->root.sizing.height.type      = Fixed;
-    ctx->root.sizing.height.size.min  = offscreen_buffer->height;
-    ctx->root.sizing.height.size.max  = offscreen_buffer->height;
-    ctx->root.bg_color                = 0xFFFFFF;
-    ctx->root.child_gap               = 0;
-    ctx->root.padding                 = (Imgui_Padding) {0, 0, 0, 0};
-    ctx->root.children.cap            = 2;
-    ctx->root.children.len            = 0;
-    ctx->root.children.elements       = malloc(ctx->root.children.cap * sizeof(Imgui_Element)); // replace by usage of custom allocator on Imgui_Memory.
+// void imgui_context_init(Imgui_Context* ctx, Imgui_Offscreen_Buffer* offscreen_buffer) {
 
-    ctx->open_stack.cap = 2;
-    ctx->open_stack.len = 0;
-    // TODO use custom allocator
-    ctx->open_stack.elements = malloc(ctx->open_stack.cap * sizeof(Imgui_Element));
+//     ctx->root.layout_direction        = Horizontal;
+//     ctx->root.position                = (Imgui_Position) {.type = Absolute, .x = 0, .y = 0};
+//     ctx->root.sizing.width.type       = Fixed;
+//     ctx->root.sizing.width.size.min   = offscreen_buffer->width;
+//     ctx->root.sizing.width.size.max   = offscreen_buffer->width;
+//     ctx->root.sizing.height.type      = Fixed;
+//     ctx->root.sizing.height.size.min  = offscreen_buffer->height;
+//     ctx->root.sizing.height.size.max  = offscreen_buffer->height;
+//     ctx->root.bg_color                = 0xFFFFFF;
+//     ctx->root.child_gap               = 0;
+//     ctx->root.padding                 = (Imgui_Padding) {0, 0, 0, 0};
+//     ctx->root.children.cap            = 2;
+//     ctx->root.children.len            = 0;
+//     ctx->root.children.elements       = malloc(ctx->root.children.cap * sizeof(Imgui_Element)); // replace by usage of custom allocator on Imgui_Memory.
 
-    if (ctx->open_stack.elements == NULL) {
-        exit(1);
-    }
+
+
+//     ctx->open_stack.cap = 2;
+//     ctx->open_stack.len = 0;
+//     // TODO use custom allocator
+//     ctx->open_stack.elements = malloc(ctx->open_stack.cap * sizeof(Imgui_Element));
+
+//     if (ctx->open_stack.elements == NULL) {
+//         exit(1);
+//     }
 
     // TODO use one from custom allocator
     // memset(ctx->open_stack.elements, 0, ctx->open_stack.cap * sizeof(Imgui_Element));
-}
+// }
 
 void imgui_element_open(
     Imgui_Context*         ctx, 
@@ -94,57 +113,64 @@ void imgui_element_open(
     Imgui_Position         position,
     Imgui_Sizing           sizing
 ) {
-    if (ctx == NULL || ctx->open_stack.elements == NULL) {
-        // TODO: log.
+    ASSERT(ctx != NULL, "Context must not be NULL");
+    ASSERT(ctx->elements.elements != NULL, "Elements must not be NULL");
+    ASSERT(ctx->elements_open_stack.elements != NULL, "Open stack must not be NULL");
+
+    if(ctx->elements.len >= ctx->elements_count_limit) {
+        // log limit of element count reached.
         return;
     }
 
+    uint32_t element_idx = ctx->elements.len;
+
     Imgui_Element element;
-    element.layout_direction = layout_direction;
-    element.bg_color         = bg_color;
-    element.child_gap        = child_gap;
-    element.padding          = padding;
-    element.position         = position;
-    element.sizing           = sizing;
+    element.layout_direction  = layout_direction;
+    element.bg_color          = bg_color;
+    element.child_gap         = child_gap;
+    element.padding           = padding;
+    element.position          = position;
+    element.sizing            = sizing;
+    element.children.cap      = UINT8_MAX;
+    element.children.len      = 0;
+    element.children.elements = (uint32_t*) gmv_arena_alloc(&ctx->allocator, sizeof(uint32_t) * element.children.cap);
 
-    imgui_element_stack_push(&ctx->open_stack, &element);
-
+    imgui_element_array_push(&ctx->elements, &element);
+    imgui_u32_stack_push(&ctx->elements_open_stack, element_idx);
 }
 
 void imgui_element_close(Imgui_Context* ctx) {
-    if (ctx == NULL || ctx->open_stack.len == 0) {
-        // TODO: log.
-        return;
-    }
+    ASSERT(ctx != NULL, "Context must not be NULL.");
 
-    Imgui_Element element;
-    (void) imgui_element_stack_pop(&ctx->open_stack, &element);
+    // TODO(AJA): handle failure.
+    uint32_t element_idx;
+    (void) imgui_u32_stack_pop(&ctx->elements_open_stack, &element_idx);
+    Imgui_Element* element = &ctx->elements.elements[element_idx];
 
     // TODO: this is more margin than padding, change this.
-    Imgui_Padding padding = element.padding;
-    element.sizing.width.size.min += padding.left + padding.right;
-    element.sizing.height.size.min += padding.top + padding.bottom;
+    Imgui_Padding padding           = element->padding;
+    element->sizing.width.size.min  += padding.left + padding.right;
+    element->sizing.height.size.min += padding.top + padding.bottom;
 
-    Imgui_Element* parent = imgui_element_stack_peek(&ctx->open_stack);
-    if (parent == NULL) {
-        imgui_element_array_push(&ctx->root.children, &element);
+    uint32_t* parent_idx = imgui_u32_stack_peek(&ctx->elements_open_stack);
+    if (parent_idx == NULL) {
         return;
     }
 
-    imgui_element_array_push(&parent->children, &element);
-
+    Imgui_Element* parent = &ctx->elements.elements[*parent_idx];
+    imgui_u32_array_push(&parent->children, element_idx);
     if (parent->layout_direction == Horizontal) {
         if (parent->children.len > 1) {
             parent->sizing.width.size.min += parent->child_gap;
         }
 
         if (parent->sizing.width.type == Fit) {
-            parent->sizing.width.size.min += element.sizing.width.size.min;
+            parent->sizing.width.size.min += element->sizing.width.size.min;
         }
 
         if (parent->sizing.height.type == Fit) {
-            if (parent->sizing.height.size.min < element.sizing.height.size.min) {
-                parent->sizing.height.size.min = element.sizing.height.size.min;
+            if (parent->sizing.height.size.min < element->sizing.height.size.min) {
+                parent->sizing.height.size.min = element->sizing.height.size.min;
             }
         }
     } else {
@@ -153,75 +179,15 @@ void imgui_element_close(Imgui_Context* ctx) {
         }
 
         if (parent->sizing.height.type == Fit) {
-            parent->sizing.height.size.min += element.sizing.height.size.min;
+            parent->sizing.height.size.min += element->sizing.height.size.min;
         }
 
         if (parent->sizing.width.type == Fit) {
-            if (parent->sizing.width.size.min < element.sizing.width.size.min) {
-                parent->sizing.width.size.min = element.sizing.width.size.min;
+            if (parent->sizing.width.size.min < element->sizing.width.size.min) {
+                parent->sizing.width.size.min = element->sizing.width.size.min;
             }
         }
     }
-}
-
-void imgui_element_array_push(Imgui_Element_Array* array, Imgui_Element* element) {
-    if (array == NULL) {
-        // TODO: log.
-        return;
-    }
-
-    if (array->len == array->cap) {
-        array->elements = imgui_backing_buffer_grow(array->elements, sizeof(Imgui_Element) * (array->cap * 2));
-        array->cap *= 2;
-    }
-
-    array->elements[array->len] = *element;
-    array->len += 1;
-}
-
-void imgui_element_stack_push(Imgui_Element_Stack* stack, Imgui_Element* element) {
-    if (stack == NULL) {
-        // TODO: log.
-        return;
-    }
-
-    if (stack->len == stack->cap) {
-        stack->elements = imgui_backing_buffer_grow(stack->elements, sizeof(Imgui_Element) * (stack->cap * 2));
-        stack->cap *= 2;
-    }
-
-    stack->elements[stack->len] = *element;
-    stack->len += 1;
-}
-
-Imgui_Element* imgui_element_stack_peek(Imgui_Element_Stack* stack) {
-    if (stack->len == 0) {
-        return NULL;
-    }
-
-    return stack->elements + (stack->len - 1);
-}
-
-bool imgui_element_stack_pop(Imgui_Element_Stack* stack, Imgui_Element* poped_element) {
-    if(stack == NULL || stack->len == 0) {
-        return false;
-    }
-
-    *poped_element = stack->elements[stack->len - 1];
-    stack->len -= 1;
-    return true;
-}
-
-void* imgui_backing_buffer_grow(void* backing_buffer, int new_size) {
-    // TODO: use custom allocator.
-    void* new_mem = (Imgui_Element*) realloc(backing_buffer, new_size);
-    if (new_mem == NULL) {
-        exit(1);
-    }
-
-    // memset to 0 the new mem space.
-
-    return new_mem;
 }
 
 void imgui_draw_rect(Imgui_Offscreen_Buffer* offscreen_buffer, uint32_t pos_x, uint32_t pos_y, uint32_t width, uint32_t height, uint32_t color) {
@@ -251,4 +217,62 @@ void imgui_draw_rect(Imgui_Offscreen_Buffer* offscreen_buffer, uint32_t pos_x, u
 
         row += offscreen_buffer->width;
     }
+}
+
+bool imgui_element_array_push(Imgui_Element_Array* array, Imgui_Element* element) {
+    ASSERT(array != NULL, "Array must not be null");
+
+    if (array->len >= array->cap) {
+        return false;
+    }
+
+    array->elements[array->len] = *element;
+    array->len += 1;
+    return true;
+}
+
+bool imgui_u32_array_push(Imgui_U32_Array* array, uint32_t element) {
+    ASSERT(array != NULL, "Array must not be null");
+
+    if (array->len >= array->cap) {
+        return false;
+    }
+
+    array->elements[array->len] = element;
+    array->len += 1;
+    return true;
+}
+
+bool imgui_u32_stack_push(Imgui_U32_Stack* stack, uint32_t element) {
+    ASSERT(stack != NULL, "Stack must not be null");
+
+    if(stack->len >= stack->cap) {
+        return false;
+    }
+
+    stack->elements[stack->len] = element;
+    stack->len += 1;
+    return true;
+}
+
+uint32_t* imgui_u32_stack_peek(Imgui_U32_Stack* stack) {
+    ASSERT(stack != NULL, "Stack must not be null");
+
+    if(stack->len == 0) {
+        return NULL;
+    }
+
+    return &stack->elements[stack->len];
+}
+
+bool imgui_u32_stack_pop(Imgui_U32_Stack* stack, uint32_t* poped_val) {
+    ASSERT(stack != NULL, "Stack must not be null");
+
+    if (stack->len == 0) {
+        return false;
+    }
+
+    *poped_val = stack->elements[stack->len - 1];
+    stack->len -= 1;
+    return true;
 }
