@@ -55,7 +55,7 @@ static void w32_bmp_resize_dib_section(W32_Bmp* bmp, int width, int height) {
 
 // TODO: Rename to w32_dc_apply_bmp ?
 static void w32_dc_update_content(HDC dc_handle, int dest_width, int dest_height, W32_Bmp* src_bmp) {
-    // TODO: correct the aspect ratio.
+    // TODO: correct the aspect ratio. Avoid stretching, use BitBlits ?
     (void) StretchDIBits(
         dc_handle,
         0, 0, dest_width, dest_height,

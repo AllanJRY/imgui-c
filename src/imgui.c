@@ -40,7 +40,8 @@ void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Mem
             10,
             (Imgui_Padding) {10, 10, 10, 10},
             (Imgui_Position) {.type = Relative, .x = 0, .y = 0},
-            (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .type = Fit }, .height = (Imgui_Sizing_Axis) { .type = Fit } }
+            // (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .type = Fit }, .height = (Imgui_Sizing_Axis) { .type = Fit } }
+            (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .type = Grow }, .height = (Imgui_Sizing_Axis) { .size.min = 300, .type = Fixed } }
         );
 
             imgui_element_open(
@@ -50,7 +51,8 @@ void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Mem
                 10,
                 (Imgui_Padding) {10, 10, 10, 10},
                 (Imgui_Position) {.type = Relative, .x = 0, .y = 0},
-                (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed }, .height = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed } }
+                // (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed }, .height = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed } }
+                (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed }, .height = (Imgui_Sizing_Axis) { .type = Grow } }
             );
             imgui_element_close(&ctx);
 
@@ -61,7 +63,20 @@ void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Mem
                 10,
                 (Imgui_Padding) {10, 10, 10, 10},
                 (Imgui_Position) {.type = Relative, .x = 0, .y = 0},
-                (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed }, .height = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed } }
+                // (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed }, .height = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed } }
+                (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .type = Grow }, .height = (Imgui_Sizing_Axis) { .type = Grow } }
+            );
+            imgui_element_close(&ctx);
+
+            imgui_element_open(
+                &ctx,
+                Horizontal,
+                0x0000FF,
+                10,
+                (Imgui_Padding) {10, 10, 10, 10},
+                (Imgui_Position) {.type = Relative, .x = 0, .y = 0},
+                // (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed }, .height = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed } }
+                (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .type = Grow }, .height = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed } }
             );
             imgui_element_close(&ctx);
 
@@ -72,6 +87,90 @@ void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Mem
     // END
 
     ASSERT(ctx.elements_open_stack.len == 0, "All elements should be closed before drawing them on screen");
+
+    // Flex sizing phase
+
+    // TODO(AJA): see if the arena should be updated to free to a defined offset/savepoint (like temp alloc from ginger bill articles).
+    //            The idea here is to avoid a big block allocation.
+    Imgui_U32_Array flex_children_idx = (Imgui_U32_Array) {
+        .cap = UINT8_MAX,
+        .len = 0,
+        .elements = (uint32_t*) gmv_arena_alloc(&ctx.allocator, sizeof(uint32_t) * UINT8_MAX)
+    };
+    uint32_t flex_children_with_width_grow_count;
+    uint32_t flex_children_with_height_grow_count;
+
+    for (uint32_t i = 0; i < ctx.elements.len; i += 1) {
+        flex_children_idx.len                = 0; // RESET the flex child indexes array.
+        flex_children_with_width_grow_count  = 0;
+        flex_children_with_height_grow_count = 0;
+
+        Imgui_Element* parent_element   = &ctx.elements.elements[i];
+        uint32_t remaining_width        = parent_element->sizing.width.size.min - (parent_element->padding.left + parent_element->padding.right);
+        uint32_t remaining_height       = parent_element->sizing.height.size.min - (parent_element->padding.top + parent_element->padding.bottom);
+        uint32_t parent_total_child_gap = parent_element->child_gap * (parent_element->children.len - 1);
+
+        if (parent_element->layout_direction == Horizontal) {
+            remaining_width  -= parent_total_child_gap;
+        } else {
+            remaining_height -= parent_total_child_gap;
+        }
+
+        // TODO(AJA): we can optimize this a bit if we can store those index at closing or opening of the flex child.
+        for (uint32_t j = 0; j < parent_element->children.len; j += 1) {
+
+            bool is_flex_child           = false;
+            uint32_t child_idx           = parent_element->children.elements[j];
+            Imgui_Element* child_element = &ctx.elements.elements[child_idx];
+
+            if (child_element->sizing.width.type == Grow) {
+                is_flex_child = true;
+                flex_children_with_width_grow_count += 1;
+            } else {
+                if (parent_element->layout_direction == Horizontal) {
+                    remaining_width  -= child_element->sizing.width.size.min;
+                }
+            }
+
+            if(child_element->sizing.height.type == Grow) {
+                is_flex_child = true;
+                flex_children_with_height_grow_count += 1;
+            } else {
+                if (parent_element->layout_direction == Vertical) {
+                    remaining_height  -= child_element->sizing.height.size.min;
+                }
+            }
+
+            if (is_flex_child) {
+                imgui_u32_array_push(&flex_children_idx, child_idx);
+             }
+
+         }
+
+        if (flex_children_idx.len > 0) {
+            uint32_t flex_children_width  = remaining_width;
+            uint32_t flex_children_height = remaining_height;
+
+            if (parent_element->layout_direction == Horizontal) {
+                flex_children_width = remaining_width / flex_children_with_width_grow_count;
+            } else {
+                flex_children_height = remaining_height / flex_children_with_height_grow_count;
+            }
+
+            for (uint32_t j = 0; j < flex_children_idx.len; j += 1) {
+                uint32_t child_idx           = flex_children_idx.elements[j];
+                Imgui_Element* child_element = &ctx.elements.elements[child_idx];
+
+                if (child_element->sizing.width.type == Grow) {
+                    child_element->sizing.width.size.min = flex_children_width;
+                }
+
+                if (child_element->sizing.height.type == Grow) {
+                    child_element->sizing.height.size.min = flex_children_height;
+                }
+            }
+        }
+    }
 
     // Position computation phase
     for (uint32_t i = 0; i < ctx.elements.len; i += 1) {
