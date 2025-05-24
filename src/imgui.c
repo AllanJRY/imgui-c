@@ -80,6 +80,17 @@ void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Mem
             );
             imgui_element_close(&ctx);
 
+            imgui_element_open(
+                &ctx,
+                Horizontal,
+                0x0F0F0F,
+                0,
+                (Imgui_Padding) {0},
+                (Imgui_Position) {.type = Absolute, .x = 200, .y = 500},
+                (Imgui_Sizing) { .width = (Imgui_Sizing_Axis) { .type = Fixed, .size.min = 200, }, .height = (Imgui_Sizing_Axis) { .size.min = 100, .type = Fixed } }
+            );
+            imgui_element_close(&ctx);
+
         imgui_element_close(&ctx);
 
     imgui_element_close(&ctx);
@@ -108,13 +119,6 @@ void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Mem
         Imgui_Element* parent_element   = &ctx.elements.elements[i];
         uint32_t remaining_width        = parent_element->sizing.width.size.min - (parent_element->padding.left + parent_element->padding.right);
         uint32_t remaining_height       = parent_element->sizing.height.size.min - (parent_element->padding.top + parent_element->padding.bottom);
-        uint32_t parent_total_child_gap = parent_element->child_gap * (parent_element->children.len - 1);
-
-        if (parent_element->layout_direction == Horizontal) {
-            remaining_width  -= parent_total_child_gap;
-        } else {
-            remaining_height -= parent_total_child_gap;
-        }
 
         // TODO(AJA): we can optimize this a bit if we can store those index at closing or opening of the flex child.
         for (uint32_t j = 0; j < parent_element->children.len; j += 1) {
@@ -127,7 +131,7 @@ void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Mem
                 is_flex_child = true;
                 flex_children_with_width_grow_count += 1;
             } else {
-                if (parent_element->layout_direction == Horizontal) {
+                if (parent_element->layout_direction == Horizontal && child_element->position.type == Relative) {
                     remaining_width  -= child_element->sizing.width.size.min;
                 }
             }
@@ -136,8 +140,16 @@ void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Mem
                 is_flex_child = true;
                 flex_children_with_height_grow_count += 1;
             } else {
-                if (parent_element->layout_direction == Vertical) {
+                if (parent_element->layout_direction == Vertical && child_element->position.type == Relative) {
                     remaining_height  -= child_element->sizing.height.size.min;
+                }
+            }
+
+            if (j > 0 && child_element->position.type == Relative) {
+                if (parent_element->layout_direction == Horizontal) {
+                    remaining_width -= parent_element->child_gap;
+                } else {
+                    remaining_height -= parent_element->child_gap;
                 }
             }
 
