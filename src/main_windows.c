@@ -22,6 +22,7 @@ typedef struct W32_Bmp { // TODO: Maybe rename to W32_Screen_buffer or something
 
 static uint64_t perf_count_frequency;
 static bool     running;
+static bool     resized;
 static W32_Bmp  screen_bmp; // TODO: Rename ?
 
 static W32_Rect w32_wnd_content_rect(HWND  wnd_handle) {
@@ -58,7 +59,8 @@ static void w32_dc_update_content(HDC dc_handle, int dest_width, int dest_height
     // TODO: correct the aspect ratio. Avoid stretching, use BitBlits ?
     (void) StretchDIBits(
         dc_handle,
-        0, 0, dest_width, dest_height,
+        // 0, 0, dest_width, dest_height,
+        0, 0, src_bmp->width, src_bmp->height,
         0, 0, src_bmp->width, src_bmp->height,
         src_bmp->mem,
         &src_bmp->info,
@@ -71,6 +73,13 @@ LRESULT w32_wnd_callback(HWND wnd_handle, UINT msg, WPARAM w_param, LPARAM l_par
     LRESULT result = 0;
 
     switch(msg) {
+        case WM_SIZE: {
+            // uint32_t new_width  = LOWORD(l_param);
+            // uint32_t new_height = HIWORD(l_param);
+            // w32_bmp_resize_dib_section(&screen_bmp, new_width, new_height);
+            resized = true;
+        } break;
+
         case WM_LBUTTONDOWN: {
             OutputDebugStringA("WM_LBUTTONDOWN");
         } break;
@@ -147,7 +156,6 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
     /*wnd_class.hIcon;*/
     /*wnd_class.hCursor;*/
 
-    w32_bmp_resize_dib_section(&screen_bmp, 1280, 720);
 
     RegisterClass(&wnd_class);
 
@@ -167,6 +175,9 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
         MessageBox(0, "Unable to create a window.", "Window creation error.", MB_ICONERROR);
         return 1;
     }
+
+    W32_Rect wnd_content_rect = w32_wnd_content_rect(wnd_handle);
+    w32_bmp_resize_dib_section(&screen_bmp, wnd_content_rect.width, wnd_content_rect.height);
 
     // NOTE: Hardcoded for now. Normally, should be corresponding the real monitor refresh rate.
     int monitor_refresh_hz = 60;
@@ -232,6 +243,14 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
                     DispatchMessage(&msg);
                 } break;
             }
+        }
+
+        // TODO(AJA): basic handling of resizing, this behaviours is ok for me, it avoid too much alloc/dealloc of the screen buffer.
+        //            But it could be interesting to see how this is handled in Handmade Hero and Kohi engine.
+        if(resized) {
+            W32_Rect wnd_content_rect = w32_wnd_content_rect(wnd_handle);
+            w32_bmp_resize_dib_section(&screen_bmp, wnd_content_rect.width, wnd_content_rect.height);
+            resized = false;
         }
 
         Imgui_Offscreen_Buffer offscreen_buffer = {0};
