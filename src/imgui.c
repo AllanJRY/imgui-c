@@ -10,8 +10,9 @@ void imgui_update_and_render(Imgui_Offscreen_Buffer* offscreen_buffer, Imgui_Mem
     // Imgui_Context* ctx = (Imgui_Context*) memory->permanent_size;
     // imgui_context_init(ctx, offscreen_buffer);
 
+    // TODO(AJA): No need to reinit everything on every frame.
     Imgui_Context ctx = {0};
-    gmv_arena_init(&ctx.allocator, memory->temporary, memory->temporary_size); // Init only if not already init.
+    gmv_arena_init(&ctx.allocator, memory->temporary, memory->temporary_size);
     ctx.elements_count_limit         = 50;
     ctx.elements.len                 = 0;
     ctx.elements.cap                 = ctx.elements_count_limit;

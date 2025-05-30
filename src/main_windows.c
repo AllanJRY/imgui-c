@@ -4,6 +4,9 @@
 
 #define KEY_STATE_IS_DOWN_MASK 0x8000
 
+#define KIBIBYTE(amount) amount * 1024
+#define MEBIBYTE(amount) amount * 1024 * 1024
+
 #include "gmv.c"
 #include "imgui.c"
 
@@ -189,11 +192,11 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
 
     // TODO: Load the memory with VirtualAlloc
     Imgui_Memory memory;
-    memory.permanent_size = 1 * 1024 * 1024; // 1 MiB - Permanent mem, could be saved on disk
-    memory.temporary_size = 1 * 1024 * 1024; // 1 MiB
+    memory.permanent_size = KIBIBYTE(500); // 1 KiB - Permanent mem, could be saved on disk
+    memory.temporary_size = MEBIBYTE(1);   // 1 MiB
     size_t total_mem_size = memory.permanent_size + memory.temporary_size;
     memory.permanent = VirtualAlloc(0, total_mem_size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-    memory.temporary = (uint8_t*) memory.permanent + memory.temporary_size;
+    memory.temporary = (uint8_t*) memory.permanent + memory.permanent_size;
 
     Imgui_Input old_input  = (Imgui_Input){0};
     Imgui_Input curr_input = (Imgui_Input){0};
@@ -295,6 +298,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
         snprintf(frame_stats_buffer, sizeof(frame_stats_buffer), "%.02fms/f, %dfps, %dmc/f", ms_per_frame, fps, mega_cycle_per_frame);
         OutputDebugStringA(frame_stats_buffer);
     }
+
+    VirtualFree(memory.permanent, 0, MEM_RELEASE);
 
     return 0;
 }
