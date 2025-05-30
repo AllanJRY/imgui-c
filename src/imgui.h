@@ -85,9 +85,9 @@ struct Imgui_Padding {
 
 struct Imgui_Sizing_Axis {
     union {
-        struct { uint32_t min, max; };
+        uint32_t size;
         float percent;
-    } size;
+    };
     Imgui_Sizing_Type type;
 };
 
